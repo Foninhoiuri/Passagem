@@ -11,6 +11,7 @@ ENV NODE_ENV=production DATA_DIR=/data
 COPY package.json ./
 COPY server/index.js server/index.js
 COPY --from=web /web/dist web/dist
+RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data
 EXPOSE 3000
