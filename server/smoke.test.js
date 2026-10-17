@@ -76,6 +76,12 @@ try{
   const icon=await req('/apple-touch-icon.png','GET',undefined,false,{origin:'null'});assert.equal(icon.status,200);assert.equal(icon.headers.get('access-control-allow-origin'),'*')
   for(const url of ['/api/session','/instalar.html','/1','/assets/foreign.js'])assert.equal((await req(url,'GET',undefined,false,{origin:'null'})).status,403,'opaque Origin remains denied outside exact public icons')
  }
+ if(fs.existsSync('web/dist/passagem-logo.png')){
+  const icon=await req('/passagem-logo.png');assert.equal(icon.status,200);const etag=icon.headers.get('etag');assert.ok(etag);assert.equal(icon.headers.get('accept-ranges'),'bytes');assert.ok(icon.headers.get('last-modified'))
+  assert.equal((await req('/passagem-logo.png','GET',undefined,false,{'if-none-match':etag})).status,304)
+  const range=await req('/passagem-logo.png','GET',undefined,false,{range:'bytes=0-31'});assert.equal(range.status,206);assert.equal((await range.arrayBuffer()).byteLength,32)
+  const manifest=await req('/manifest.webmanifest','GET',undefined,false,{origin:'null'});assert.equal(manifest.status,200);assert.equal((await manifest.json()).start_url,'/')
+ }
  const health=await req('/health');assert.equal(health.status,200);assert.equal(health.headers.get('x-content-type-options'),'nosniff');assert.equal(health.headers.get('x-frame-options'),'DENY');assert.ok(health.headers.get('content-security-policy'));assert.equal(health.headers.get('cache-control'),'no-store')
  await login()
  assert.ok((await(await req('/api/1','GET',undefined,true)).json()).items.some(i=>i.id===privateText.id),'private room persists')

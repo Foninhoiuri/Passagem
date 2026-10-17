@@ -1,6 +1,6 @@
 // Only public installation assets are cached. Never cache APIs, room links or files.
-const CACHE='passagem-public-v5'
-const PUBLIC=['/apple-touch-icon-v3.png','/apple-touch-icon.png','/apple-touch-icon-precomposed.png','/offline.html','/manifest.webmanifest?v=3','/icons/passagem-v2-32.png','/icons/passagem-v2-48.png','/icons/passagem-v3-180.png','/icons/passagem-v3-192.png','/icons/passagem-v3-512.png','/icons/passagem-v3-maskable-512.png']
+const CACHE='passagem-public-v6'
+const PUBLIC=['/passagem-logo.png','/passagem-192.png','/apple-touch-icon-v3.png','/apple-touch-icon.png','/apple-touch-icon-precomposed.png','/offline.html','/manifest.webmanifest','/icons/passagem-v2-32.png','/icons/passagem-v2-48.png','/icons/passagem-v3-180.png','/icons/passagem-v3-192.png','/icons/passagem-v3-512.png','/icons/passagem-v3-maskable-512.png']
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PUBLIC)).then(()=>self.skipWaiting()))})
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('passagem-public-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))})
 self.addEventListener('fetch',event=>{

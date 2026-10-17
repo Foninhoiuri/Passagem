@@ -3,10 +3,11 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { audit, body, error, guard, json, login, logout, isPublicIcon, requireOwner, securityError, session } from './security.js'
+import { audit, body, error, guard, json, login, logout, isPublicIcon, isPublicPwaAsset, requireOwner, securityError, session } from './security.js'
 import { addText, alive, cancelUpload, cleanup, cleanupRoom, closeRoom, createRoom, finishUpload, items, limits, rooms, sendFile, startUpload, touch, ttlMs, uploadState, validRoom, writeChunk } from './storage.js'
 import {thumbnail} from './thumbnails.js'
 import {documentPreview} from './previews.js'
+import {sendPublicIcon} from './public-icons.js'
 const PORT=Number(process.env.PORT||3000)
 const WEB=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web/dist')
 const VERSION=process.env.APP_VERSION||'development'
@@ -55,7 +56,8 @@ function staticFile(req,res,url){
  if(!fs.existsSync(file))throw error(503,'Interface indisponível.')
  const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.woff2':'font/woff2','.webmanifest':'application/manifest+json'}
  res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream')
- if(isPublicIcon(decoded)){
+ if(isPublicPwaAsset(decoded)){
+  res.setHeader('Cache-Control',isPublicIcon(decoded)?'public, max-age=14400':'no-cache')
   res.setHeader('Access-Control-Allow-Origin','*')
   if(process.env.ICON_DIAGNOSTICS==='true'){
    const ua=req.headers['user-agent']||'',origin=req.headers.origin
@@ -65,6 +67,8 @@ function staticFile(req,res,url){
  }
 
  if(/^\/(?:apple-touch-icon[^/]*\.png|icons\/[^/]+\.png)$/.test(decoded))res.setHeader('Cache-Control','public, max-age=86400')
+ if(isPublicIcon(decoded))return sendPublicIcon(req,res,file)
+ if(decoded === '/manifest.webmanifest')res.setHeader('Cache-Control','no-cache')
  if(decoded.startsWith('/assets/'))res.setHeader('Cache-Control','public, max-age=31536000, immutable')
  res.setHeader('Content-Length',fs.statSync(file).size)
  if(req.method==='HEAD')return res.end()

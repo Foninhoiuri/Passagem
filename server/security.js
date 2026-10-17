@@ -90,18 +90,19 @@ export function requireCsrf(req) {
   const s = requireOwner(req), supplied = String(req.headers['x-csrf-token'] || '')
   if (!/^[a-f0-9]{64}$/.test(supplied) || supplied.length !== s.csrf.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(s.csrf))) throw error(403, 'Atualize a página para confirmar esta ação.')
 }
-export const isPublicIcon = pathname => /^(?:\/apple-touch-icon(?:-v3|-precomposed|-180x180)?\.png|\/icons\/passagem-v[23]-(?:32|48|120|152|167|180|192|512|maskable-512)\.png)$/.test(pathname)
+export const isPublicIcon = pathname => /^(?:\/passagem-(?:logo|192)\.png|\/apple-touch-icon(?:-v3|-precomposed|-180x180)?\.png|\/icons\/passagem-v[23]-(?:32|48|120|152|167|180|192|512|maskable-512)\.png)$/.test(pathname)
+export const isPublicPwaAsset = pathname => isPublicIcon(pathname) || pathname === '/manifest.webmanifest'
 export function guard(req, res, url) {
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()')
   res.setHeader('Cache-Control', 'no-store')
-  res.setHeader(process.env.CSP_REPORT_ONLY === 'true' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; manifest-src 'self'; worker-src 'self'")
+  res.setHeader(process.env.CSP_REPORT_ONLY === 'true' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy', "default-src " + ((isPublicPwaAsset(url.pathname) || url.pathname === '/instalar.html') ? "'self'" : "'none'") + "; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; manifest-src 'self'; worker-src 'self'")
   if (originUrl.protocol === 'https:') res.setHeader('Strict-Transport-Security', 'max-age=31536000')
   if (PRODUCTION && (!trustedProxy(req) || req.headers['x-forwarded-proto'] !== 'https')) {
     res.writeHead(308, { Location: ORIGIN + url.pathname + url.search }); res.end(); return false
   }
   const origin = req.headers.origin
-  const publicIconRead = ['GET', 'HEAD'].includes(req.method) && isPublicIcon(url.pathname)
+  const publicIconRead = ['GET', 'HEAD'].includes(req.method) && isPublicPwaAsset(url.pathname)
   if (origin && origin !== originUrl.origin && !publicIconRead) throw error(403, 'Origem não permitida.')
   if (req.headers['sec-fetch-site'] === 'cross-site' && !['GET', 'HEAD'].includes(req.method)) throw error(403, 'Origem não permitida.')
   const now = Date.now(), key = clientKey(req)
