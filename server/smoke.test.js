@@ -68,6 +68,10 @@ try{
  r=await init(other,'fake.png',3,'image/png');const bad=await r.json();await req(`/api/${other}/uploads/${bad.id}`,'PATCH',Buffer.from('bad'),false,{'content-type':'application/octet-stream','upload-offset':'0'});assert.equal((await req(`/api/${other}/uploads/${bad.id}/complete`,'POST')).status,415);await req(`/api/${other}/uploads/${bad.id}`,'DELETE')
  assert.equal((await req('/api/..%2f..%2fetc')).status,404)
  for(const u of ['/.env','/.git/config','/assets/index.js.map','/server/security.js'])assert.equal((await req(u)).status,404)
+ // Public installation icons must work without a session, including Apple's conventional paths.
+ if(fs.existsSync('web/dist/apple-touch-icon.png'))for(const url of ['/apple-touch-icon.png','/apple-touch-icon-precomposed.png','/apple-touch-icon-180x180.png','/apple-touch-icon-v3.png']){
+  const icon=await req(url);assert.equal(icon.status,200);assert.match(icon.headers.get('content-type'),/image\/png/);assert.match(icon.headers.get('cache-control'),/public/);const meta=await sharp(Buffer.from(await icon.arrayBuffer())).metadata();assert.equal(meta.width,180);assert.equal(meta.channels,3)
+ }
  const health=await req('/health');assert.equal(health.status,200);assert.equal(health.headers.get('x-content-type-options'),'nosniff');assert.equal(health.headers.get('x-frame-options'),'DENY');assert.ok(health.headers.get('content-security-policy'));assert.equal(health.headers.get('cache-control'),'no-store')
  await login()
  assert.ok((await(await req('/api/1','GET',undefined,true)).json()).items.some(i=>i.id===privateText.id),'private room persists')

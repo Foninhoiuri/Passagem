@@ -51,3 +51,10 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--color-bord
 .hljs-comment { color: var(--color-text-tertiary); font-style: italic; }
 @media (max-width: 480px) { .panel { padding: 1rem; }.drop-zone__area { padding: 1.5rem .75rem; }.segmented button { padding: .4rem .5rem; }.upload-item { padding: .65rem; gap: .5rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+
+.pdf-preview {width:100%;min-width:0;}
+.pdf-cover {display:block;width:100%;cursor:zoom-in;text-align:left;}
+.pdf-cover .received-image {max-height:22rem;max-width:100%;border:1px solid var(--color-border-secondary);background:#fff;}
+.pdf-dialog {max-height:94dvh;overflow:auto;}
+.pdf-page {max-height:65dvh;overflow:auto;background:var(--color-bg-secondary);border:1px solid var(--color-border-secondary);border-radius:.5rem;}
+.pdf-page img {display:block;width:100%;height:auto;background:#fff;}

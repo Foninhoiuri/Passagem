@@ -25,3 +25,9 @@ Docker Compose no Portainer, volume persistente `passagem-data`, usuário sem pr
 `APP_VERSION` é o SHA aprovado no build e fica disponível em `/version`. Preserve o volume e faça backup com teste de restauração antes de atualizar. As sessões são revogadas ao reiniciar.
 
 A API usa `/api/session`, `/api/login`, `/api/logout`, `/api/rooms` e `/api/{sala}`. As operações privadas exigem cookie de sessão e CSRF; salas compartilhadas usam códigos aleatórios. Não coloque senha no URL ou no armazenamento do navegador. Veja [a conferência de segurança](docs/seguranca-2026-10-16.md) e [a marca](brand/README.md).
+
+## Prévia de PDF
+
+Documentos PDF de até50MB recebem miniatura da primeira página e visualizador com navegação até1000páginas. Poppler renderiza uma página por vez em processo separado, limitado por prlimit e timeout. O navegador recebe somente WebP, sem executar o PDF no domínio. Apenas a primeira página tem cache no volume; páginas seguintes são transitórias. Excluir ou expirar o documento remove também sua miniatura. O download original continua como attachment. Teste adicional: `node server/document-preview.test.js`, repetido dentro da imagem Linux pelo CI.
+
+Os ícones de instalação são PNG RGB opacos, incluindo os caminhos padrão Apple na raiz e uma página pública `/instalar.html`. Apenas ícones públicos podem ter cache HTTP; respostas de salas e documentos continuam no-store. A interface do instalador físico iOS precisa ser confirmada no aparelho, separadamente do teste de recursos/manifesto.
