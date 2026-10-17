@@ -17,5 +17,6 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
+      - run: npm ci --omit=dev
       - run: node server/smoke.test.js
       - run: docker build -t passagem:ci .

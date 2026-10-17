@@ -1,125 +1,69 @@
-// Passagem: área de transferência de mão dupla por link. Sem dependências.
+// Passagem: sala privada do proprietário + salas compartilhadas por links secretos.
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
-import crypto from 'node:crypto'
-import { pipeline } from 'node:stream/promises'
-import { Transform } from 'node:stream'
 import { fileURLToPath } from 'node:url'
-
-const PORT = Number(process.env.PORT || 3000)
-const DATA = path.resolve(process.env.DATA_DIR || './data')
-const PIN = process.env.ADMIN_PIN || ''
-const TTL_MS = Number(process.env.ROOM_TTL_HOURS || 24) * 3600e3
-const MAX_FILE = Number(process.env.MAX_FILE_MB || 500) * 1048576
-const MAX_ROOM = Number(process.env.MAX_ROOM_MB || 2048) * 1048576
-const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web', 'dist')
-const ALPHA = 'abcdefghjkmnpqrstuvwxyz23456789'
-const CODE = /^[a-z2-9]{8}$/
-const ID = /^[a-f0-9]{16}$/
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json' }
-
-if (!PIN) { console.error('ADMIN_PIN não definido: defina no ambiente.'); process.exit(1) }
-fs.mkdirSync(DATA, { recursive: true })
-
-const roomDir = (c) => path.join(DATA, c)
-const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
-const randCode = () => Array.from(crypto.randomBytes(8), (b) => ALPHA[b % ALPHA.length]).join('')
-const touch = (c) => { const t = new Date(); fs.utimesSync(roomDir(c), t, t) }
-const alive = (c) => { try { return Date.now() - fs.statSync(roomDir(c)).mtimeMs < TTL_MS } catch { return false } }
-const safeName = (n) => (String(n || 'arquivo').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 200) || 'arquivo')
-const roomSize = (c) => fs.readdirSync(roomDir(c)).filter((f) => f.endsWith('.bin')).reduce((s, f) => s + fs.statSync(path.join(roomDir(c), f)).size, 0)
-
-// ponytail: limite por IP em memória (reinicia com o processo); trocar por Redis se virar multi-instância
-const fails = new Map()
-const ipOf = (req) => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()
-const recent = (ip) => (fails.get(ip) || []).filter((t) => Date.now() - t < 600e3)
-const blocked = (ip) => recent(ip).length >= 30
-const fail = (ip) => fails.set(ip, [...recent(ip), Date.now()])
-const sha = (s) => crypto.createHash('sha256').update(String(s)).digest()
-
-function items(c) {
-  return fs.readdirSync(roomDir(c)).filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(roomDir(c), f), 'utf8')))
-    .sort((a, b) => b.at - a.at)
+import { audit, body, error, guard, json, login, logout, requireOwner, securityError, session } from './security.js'
+import { addText, alive, cancelUpload, cleanup, cleanupRoom, closeRoom, createRoom, finishUpload, items, limits, rooms, sendFile, startUpload, touch, ttlMs, uploadState, validRoom, writeChunk } from './storage.js'
+import {thumbnail} from './thumbnails.js'
+const PORT=Number(process.env.PORT||3000)
+const WEB=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web/dist')
+const VERSION=process.env.APP_VERSION||'development'
+async function api(req,res,url){
+ const parts=url.pathname.split('/').filter(Boolean).slice(1)
+ if(parts.length===1&&parts[0]==='session'&&req.method==='GET'){const s=session(req);return json(res,200,{isAdmin:!!s,...(s?{csrfToken:s.csrf}:{})})}
+ if(parts.length===1&&parts[0]==='login'&&req.method==='POST')return login(req,res)
+ if(parts.length===1&&parts[0]==='logout'&&req.method==='POST')return logout(req,res)
+ if(parts.length===1&&parts[0]==='rooms'&&req.method==='POST'){requireOwner(req);const c=createRoom();audit(req,'room-create',c);return json(res,201,{code:c})}
+ if(parts.length===2&&parts[0]==='rooms'&&req.method==='DELETE'){requireOwner(req);if(!validRoom(parts[1]))throw error(404,'Sala não encontrada.');closeRoom(parts[1]);audit(req,'room-close',parts[1]);return json(res,200,{ok:true})}
+ const [c,kind,id,operation]=parts
+ if(!validRoom(c))throw error(404,'Sala não encontrada.')
+ if(c==='1')requireOwner(req)
+ cleanupRoom(c)
+ if(!alive(c))throw error(404,'Sala não encontrada ou expirada.')
+ if(parts.length===1&&req.method==='GET')return json(res,200,{items:items(c),ttlHours:c==='1'?null:ttlMs/3600e3,itemTtlHours:ttlMs/3600e3,...limits,isPrivate:c==='1',isAdmin:!!session(req),...(c==='1'?{sharedRooms:rooms()}:{})})
+ if(parts.length===2&&kind==='text'&&req.method==='POST'){const {text}=await body(req,1024*1024,['text']);const item=addText(c,text);audit(req,'text-create',c);return json(res,201,item)}
+ if(parts.length===2&&kind==='uploads'&&req.method==='POST'){const data=await body(req,2048,['name','size','type']);const upload=startUpload(c,data);audit(req,'upload-start',c);return json(res,201,upload)}
+ if(parts.length===3&&kind==='uploads'){
+  if(req.method==='GET')return json(res,200,uploadState(c,id))
+  if(req.method==='PATCH'){const state=await writeChunk(c,id,req);audit(req,'upload-chunk',c);return json(res,200,state)}
+  if(req.method==='DELETE'){cancelUpload(c,id);audit(req,'upload-cancel',c);return json(res,200,{ok:true})}
+ }
+ if(parts.length===4&&kind==='uploads'&&operation==='complete'&&req.method==='POST'){const item=finishUpload(c,id);audit(req,'file-create',c);return json(res,201,item)}
+ if(parts.length===3&&kind==='thumbnail'&&req.method==='GET'){const file=await thumbnail(c,id);audit(req,'thumbnail-read',c);res.writeHead(200,{'Content-Type':'image/webp','Content-Length':fs.statSync(file).size});const stream=fs.createReadStream(file);stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());return stream.pipe(res)}
+ if(parts.length===3&&kind==='file'&&['GET','HEAD'].includes(req.method)){audit(req,'file-download',c);return sendFile(req,res,c,id)}
+ if(parts.length===3&&kind==='item'&&req.method==='DELETE'){remove(req,res,c,id);return}
+ throw error(404,'Não encontrado.')
 }
-
-async function api(req, res, url) {
-  const ip = ipOf(req)
-  const parts = url.pathname.split('/').filter(Boolean).slice(1) // tira "api"
-
-  if (req.method === 'POST' && parts[0] === 'rooms') {
-    if (blocked(ip)) return json(res, 429, { erro: 'Muitas tentativas.' })
-    if (!crypto.timingSafeEqual(sha(req.headers['x-pin']), sha(PIN))) { fail(ip); return json(res, 401, { erro: 'PIN incorreto.' }) }
-    let code; do code = randCode(); while (fs.existsSync(roomDir(code)))
-    fs.mkdirSync(roomDir(code))
-    return json(res, 201, { code })
-  }
-
-  const code = parts[0]
-  if (!CODE.test(code || '')) return json(res, 404, { erro: 'Sala não encontrada.' })
-  if (blocked(ip)) return json(res, 429, { erro: 'Muitas tentativas.' })
-  if (!alive(code)) { fail(ip); return json(res, 404, { erro: 'Sala não encontrada ou expirada.' }) }
-
-  const [, kind, id] = parts
-  if (req.method === 'GET' && !kind) return json(res, 200, { items: items(code), ttlHours: TTL_MS / 3600e3, maxFileMb: MAX_FILE / 1048576 })
-
-  if (req.method === 'POST' && kind === 'text') {
-    let raw = ''
-    for await (const ch of req) { raw += ch; if (raw.length > 1e6) return json(res, 413, { erro: 'Texto grande demais.' }) }
-    const text = String(JSON.parse(raw || '{}').text || '').trim()
-    if (!text) return json(res, 400, { erro: 'Texto vazio.' })
-    const item = { id: crypto.randomBytes(8).toString('hex'), kind: 'text', text, at: Date.now() }
-    fs.writeFileSync(path.join(roomDir(code), item.id + '.json'), JSON.stringify(item))
-    touch(code)
-    return json(res, 201, item)
-  }
-
-  if (req.method === 'PUT' && kind === 'file') {
-    const declared = Number(req.headers['content-length'] || 0)
-    if (declared > MAX_FILE) return json(res, 413, { erro: `Máximo de ${MAX_FILE / 1048576} MB por arquivo.` })
-    if (roomSize(code) + declared > MAX_ROOM) return json(res, 413, { erro: 'Sala cheia.' })
-    const fid = crypto.randomBytes(8).toString('hex')
-    const bin = path.join(roomDir(code), fid + '.bin')
-    let n = 0
-    const cap = new Transform({ transform(chunk, _e, cb) { n += chunk.length; cb(n > MAX_FILE ? new Error('grande') : null, chunk) } })
-    try { await pipeline(req, cap, fs.createWriteStream(bin)) } catch { fs.rmSync(bin, { force: true }); return json(res, 413, { erro: 'Arquivo grande demais.' }) }
-    const item = { id: fid, kind: 'file', name: safeName(url.searchParams.get('name')), size: n, at: Date.now() }
-    fs.writeFileSync(path.join(roomDir(code), fid + '.json'), JSON.stringify(item))
-    touch(code)
-    return json(res, 201, item)
-  }
-
-  if (ID.test(id || '')) {
-    const meta = path.join(roomDir(code), id + '.json')
-    if (!fs.existsSync(meta)) return json(res, 404, { erro: 'Item não encontrado.' })
-    if (req.method === 'GET' && kind === 'file') {
-      const it = JSON.parse(fs.readFileSync(meta, 'utf8'))
-      res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': it.size, 'content-disposition': "attachment; filename*=UTF-8''" + encodeURIComponent(it.name), 'x-content-type-options': 'nosniff' })
-      return fs.createReadStream(path.join(roomDir(code), id + '.bin')).pipe(res)
-    }
-    if (req.method === 'DELETE' && kind === 'item') {
-      fs.rmSync(meta, { force: true }); fs.rmSync(path.join(roomDir(code), id + '.bin'), { force: true })
-      touch(code)
-      return json(res, 200, { ok: true })
-    }
-  }
-  return json(res, 404, { erro: 'Não encontrado.' })
+import {removeItem} from './storage.js'
+function remove(req,res,c,id){const roomClosed=removeItem(c,id);audit(req,'item-delete',c);json(res,200,{ok:true,roomClosed})}
+function staticFile(req,res,url){
+ let decoded
+ try{decoded=decodeURIComponent(url.pathname)}catch{throw error(400,'Endereço inválido.')}
+ if(decoded.includes('\\')||decoded.split('/').some(p=>p.startsWith('.'))||/\.(?:map|tsx?|jsx|lock|ya?ml|env)$/i.test(decoded)||/^\/(?:src|server|node_modules|docs)(?:\/|$)/i.test(decoded))throw error(404,'Não encontrado.')
+ if(!['GET','HEAD'].includes(req.method))throw error(405,'Método não permitido.')
+ let file=path.resolve(WEB,'.'+decoded)
+ if(file!==WEB&&!file.startsWith(WEB+path.sep))throw error(404,'Não encontrado.')
+ if(!fs.existsSync(file)||fs.statSync(file).isDirectory()){
+  if(decoded.startsWith('/assets/')||path.extname(decoded))throw error(404,'Não encontrado.')
+  file=path.join(WEB,'index.html')
+ }
+ if(!fs.existsSync(file))throw error(503,'Interface indisponível.')
+ const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.woff2':'font/woff2','.webmanifest':'application/manifest+json'}
+ res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream')
+ if(decoded.startsWith('/assets/'))res.setHeader('Cache-Control','public, max-age=31536000, immutable')
+ res.setHeader('Content-Length',fs.statSync(file).size)
+ if(req.method==='HEAD')return res.end()
+ const stream=fs.createReadStream(file);stream.on('error',()=>res.destroy());stream.pipe(res)
 }
-
-function serveStatic(req, res, url) {
-  let f = path.join(WEB, path.normalize(url.pathname))
-  if (!f.startsWith(WEB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(WEB, 'index.html')
-  res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' })
-  fs.createReadStream(f).pipe(res)
-}
-
-http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x')
-  if (!url.pathname.startsWith('/api/')) return serveStatic(req, res, url)
-  api(req, res, url).catch((e) => { console.error(e); if (!res.headersSent) json(res, 500, { erro: 'Erro interno.' }); else res.destroy() })
-}).listen(PORT, () => console.log(`Passagem em :${PORT}`))
-
-setInterval(() => {
-  for (const c of fs.readdirSync(DATA)) if (CODE.test(c) && !alive(c)) fs.rmSync(roomDir(c), { recursive: true, force: true })
-}, 600e3)
+http.createServer({requestTimeout:120000,headersTimeout:15000,maxHeaderSize:16384},(req,res)=>{
+ (async()=>{
+  const url=new URL(req.url,'http://local')
+  if(!guard(req,res,url))return
+  if(url.pathname==='/health'&&req.method==='GET')return json(res,200,{ok:true})
+  if(url.pathname==='/version'&&req.method==='GET')return json(res,200,{version:VERSION})
+  if(url.pathname.startsWith('/api/'))return api(req,res,url)
+  return staticFile(req,res,url)
+ })().catch(e=>securityError(req,res,e))
+}).listen(PORT,()=>console.log(`Passagem em :${PORT}`))
+setInterval(()=>{try{cleanup()}catch(e){console.error(JSON.stringify({event:'cleanup-failed',code:e.code||'internal'}))}},60000).unref()

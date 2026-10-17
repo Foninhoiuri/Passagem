@@ -7,9 +7,11 @@ RUN npm run build
 
 FROM node:24-alpine
 WORKDIR /app
-ENV NODE_ENV=production DATA_DIR=/data
-COPY package.json ./
-COPY server/index.js server/index.js
+ARG APP_VERSION=development
+ENV NODE_ENV=production DATA_DIR=/data APP_VERSION=${APP_VERSION}
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY server/ server/
 COPY --from=web /web/dist web/dist
 RUN mkdir -p /data && chown node:node /data
 USER node

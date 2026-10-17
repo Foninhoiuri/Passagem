@@ -1,16 +1,47 @@
 services:
   passagem:
-    build: .
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-development}
     restart: unless-stopped
     ports:
-      - "${HOST_PORT:-8090}:3000"
+      - "127.0.0.1:${HOST_PORT:-8090}:3000"
     environment:
       ADMIN_PIN: ${ADMIN_PIN:?defina ADMIN_PIN nas variáveis da stack}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?defina PUBLIC_ORIGIN com HTTPS}
+      TRUST_PROXY_CIDRS: ${TRUST_PROXY_CIDRS:?defina a rede interna do cloudflared}
       ROOM_TTL_HOURS: ${ROOM_TTL_HOURS:-24}
-      MAX_FILE_MB: ${MAX_FILE_MB:-500}
-      MAX_ROOM_MB: ${MAX_ROOM_MB:-2048}
+      MAX_FILE_MB: ${MAX_FILE_MB:-5120}
+      MAX_ROOM_MB: ${MAX_ROOM_MB:-8192}
+      MAX_TOTAL_MB: ${MAX_TOTAL_MB:-12288}
+      MIN_FREE_MB: ${MIN_FREE_MB:-2048}
+      UPLOAD_CHUNK_MB: ${UPLOAD_CHUNK_MB:-8}
+      UPLOAD_TTL_HOURS: ${UPLOAD_TTL_HOURS:-6}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_ACCOUNT_ATTEMPTS: ${LOGIN_ACCOUNT_ATTEMPTS:-20}
+      SESSION_HOURS: ${SESSION_HOURS:-8}
     volumes:
       - passagem-data:/data
-
+    networks:
+      proxy:
+        aliases:
+          - passagem
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health',{redirect:'manual'}).then(r=>process.exit(r.status===308||r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 volumes:
   passagem-data:
+networks:
+  proxy:
+    external: true

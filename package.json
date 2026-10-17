@@ -1,1 +1,12 @@
-{"type":"module"}
+{
+  "type": "module",
+  "dependencies": {
+    "sharp": "0.35.5"
+  },
+  "name": "passagem",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "test": "node server/smoke.test.js"
+  }
+}
