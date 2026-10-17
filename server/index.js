@@ -3,13 +3,14 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { audit, body, error, guard, json, login, logout, requireOwner, securityError, session } from './security.js'
+import { audit, body, error, guard, json, login, logout, isPublicIcon, requireOwner, securityError, session } from './security.js'
 import { addText, alive, cancelUpload, cleanup, cleanupRoom, closeRoom, createRoom, finishUpload, items, limits, rooms, sendFile, startUpload, touch, ttlMs, uploadState, validRoom, writeChunk } from './storage.js'
 import {thumbnail} from './thumbnails.js'
 import {documentPreview} from './previews.js'
 const PORT=Number(process.env.PORT||3000)
 const WEB=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web/dist')
 const VERSION=process.env.APP_VERSION||'development'
+const iconDiagnosticSeen=new Set()
 async function api(req,res,url){
  const parts=url.pathname.split('/').filter(Boolean).slice(1)
  if(parts.length===1&&parts[0]==='session'&&req.method==='GET'){const s=session(req);return json(res,200,{isAdmin:!!s,...(s?{csrfToken:s.csrf}:{})})}
@@ -54,6 +55,15 @@ function staticFile(req,res,url){
  if(!fs.existsSync(file))throw error(503,'Interface indisponível.')
  const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.woff2':'font/woff2','.webmanifest':'application/manifest+json'}
  res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream')
+ if(isPublicIcon(decoded)){
+  res.setHeader('Access-Control-Allow-Origin','*')
+  if(process.env.ICON_DIAGNOSTICS==='true'){
+   const ua=req.headers['user-agent']||'',origin=req.headers.origin
+   const event={event:'public-icon-read',path:decoded,origin:origin==='null'?'opaque':origin?'supplied':'absent',agent:/CFNetwork/.test(ua)?'system':/iPhone|iPad/.test(ua)?'ios':/AppleWebKit/.test(ua)?'webkit':'other',fetchDestination:['image','document','empty'].includes(req.headers['sec-fetch-dest'])?req.headers['sec-fetch-dest']:'absent'}
+   const key=JSON.stringify(event);if(!iconDiagnosticSeen.has(key)&&iconDiagnosticSeen.size<100){iconDiagnosticSeen.add(key);console.log(key)}
+  }
+ }
+
  if(/^\/(?:apple-touch-icon[^/]*\.png|icons\/[^/]+\.png)$/.test(decoded))res.setHeader('Cache-Control','public, max-age=86400')
  if(decoded.startsWith('/assets/'))res.setHeader('Cache-Control','public, max-age=31536000, immutable')
  res.setHeader('Content-Length',fs.statSync(file).size)

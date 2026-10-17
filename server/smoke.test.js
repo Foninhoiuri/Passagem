@@ -72,6 +72,10 @@ try{
  if(fs.existsSync('web/dist/apple-touch-icon.png'))for(const url of ['/apple-touch-icon.png','/apple-touch-icon-precomposed.png','/apple-touch-icon-180x180.png','/apple-touch-icon-v3.png']){
   const icon=await req(url);assert.equal(icon.status,200);assert.match(icon.headers.get('content-type'),/image\/png/);assert.match(icon.headers.get('cache-control'),/public/);const meta=await sharp(Buffer.from(await icon.arrayBuffer())).metadata();assert.equal(meta.width,180);assert.equal(meta.channels,3)
  }
+ if(fs.existsSync('web/dist/apple-touch-icon.png')){
+  const icon=await req('/apple-touch-icon.png','GET',undefined,false,{origin:'null'});assert.equal(icon.status,200);assert.equal(icon.headers.get('access-control-allow-origin'),'*')
+  for(const url of ['/api/session','/instalar.html','/1','/assets/foreign.js'])assert.equal((await req(url,'GET',undefined,false,{origin:'null'})).status,403,'opaque Origin remains denied outside exact public icons')
+ }
  const health=await req('/health');assert.equal(health.status,200);assert.equal(health.headers.get('x-content-type-options'),'nosniff');assert.equal(health.headers.get('x-frame-options'),'DENY');assert.ok(health.headers.get('content-security-policy'));assert.equal(health.headers.get('cache-control'),'no-store')
  await login()
  assert.ok((await(await req('/api/1','GET',undefined,true)).json()).items.some(i=>i.id===privateText.id),'private room persists')
