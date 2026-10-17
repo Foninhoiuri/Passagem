@@ -15,5 +15,6 @@ try{
  assert.equal(meta.format,'webp');assert.ok(meta.width<=640&&meta.height<=480);assert.equal(meta.exif,undefined)
  assert.equal(await thumbnail('1',id),file,'cached result reused')
  fs.rmSync(file);fs.writeFileSync(path.join(data,'1',id+'.bin'),Buffer.concat([body.subarray(0,64),Buffer.alloc(20)]));await assert.rejects(thumbnail('1',id),e=>e.status===404,'corrupt HEIC fails safely')
- console.log('OK: HEIC real decodificado, reduzido e sem EXIF; cache reutilizado.')
+ const largeId='b'.repeat(32),large=fs.readFileSync(path.join(import.meta.dirname,'fixtures/transfer-24mp.heic'));fs.writeFileSync(path.join(data,'1',largeId+'.bin'),large);fs.writeFileSync(path.join(data,'1',largeId+'.json'),JSON.stringify({id:largeId,kind:'file',name:'camera-24mp.HEIC',size:large.length,at:Date.now()}));const reduced=await sharp(await thumbnail('1',largeId)).metadata();assert.ok(reduced.width<=640&&reduced.height<=480)
+ console.log('OK: HEIC real de 24 MP e fixture pequena decodificados, reduzido e sem EXIF; cache reutilizado.')
 }finally{fs.rmSync(data,{recursive:true,force:true})}
