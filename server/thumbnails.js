@@ -17,7 +17,7 @@ function release(){const next=waiters.shift();if(next)next();else processing--}
 function raster(file){
  const fd=fs.openSync(file,'r'),b=Buffer.alloc(64);try{fs.readSync(fd,b,0,64,0)}finally{fs.closeSync(fd)}
  if(b.toString('ascii',4,8)==='ftyp'&&!/(avif|avis)/.test(b.toString('ascii',8,64))&&/(heic|heix|hevc|hevx|mif1|msf1)/.test(b.toString('ascii',8,64)))return 'heic'
- if(b.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))||(b[0]===255&&b[1]===216)||/^GIF8[79]a/.test(b.toString('ascii'))||(b.toString('ascii',0,4)==='RIFF'&&b.toString('ascii',8,12)==='WEBP')||/^ftypavi[fs]$/.test(b.toString('ascii',4,12))||b.toString('ascii',0,2)==='BM'||b.subarray(0,4).equals(Buffer.from('49492a00','hex'))||b.subarray(0,4).equals(Buffer.from('4d4d002a','hex')))return 'raster'
+ if(b.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))||(b[0]===255&&b[1]===216)||/^GIF8[79]a/.test(b.toString('ascii'))||(b.toString('ascii',0,4)==='RIFF'&&b.toString('ascii',8,12)==='WEBP')||/^ftypavi[fs]$/.test(b.toString('ascii',4,12))||b.subarray(0,4).equals(Buffer.from('49492a00','hex'))||b.subarray(0,4).equals(Buffer.from('4d4d002a','hex')))return 'raster'
  return null
 }
 async function heicThumbnail(file,tmp){
@@ -47,7 +47,7 @@ export async function thumbnail(c,id){
     else await sharp(file,{limitInputPixels:40e6,sequentialRead:true,animated:false,failOn:'warning'}).rotate().resize({width:640,height:480,fit:'inside',withoutEnlargement:true}).webp({quality:78}).timeout({seconds:5}).toFile(tmp)
     if(!fs.existsSync(file))throw error(404,'Arquivo não encontrado.')
     fs.chmodSync(tmp,0o600);fs.renameSync(tmp,out);return out
-   }catch(e){fs.rmSync(tmp,{force:true});throw e.status?e:error(404,'Não foi possível gerar a miniatura deste arquivo.')}
+   }catch(e){fs.rmSync(tmp,{force:true});if(e.status)throw e;const failure=error(404,'Não foi possível gerar a miniatura deste arquivo.');Object.defineProperty(failure,'cause',{value:e});throw failure}
    finally{release();jobs.delete(key)}
   })();jobs.set(key,promise)
  }

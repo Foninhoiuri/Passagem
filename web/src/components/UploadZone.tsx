@@ -40,7 +40,7 @@ export function UploadZone({ code, maxFileMb, onComplete }: { code: string; maxF
         catch (e) { if ((e as {status?: number}).status !== 404) throw e; remember(key) }
       }
       if (!state) state = await api(`/api/${code}/uploads`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: item.file.name || 'colado.png', size: item.file.size, type: item.file.type || 'application/octet-stream' }) })
-      if (state.complete) { remember(key); update(item.id, { status: 'complete', progress: 100, thumbnail: /\.(png|jpe?g|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(item.file.name) ? `/api/${code}/thumbnail/${state.item.id}` : undefined }); onComplete(); return }
+      if (state.complete) { remember(key); update(item.id, { status: 'complete', progress: 100, thumbnail: /\.(png|jpe?g|webp|gif|avif|heic|heif|tiff?)$/i.test(item.file.name) ? `/api/${code}/thumbnail/${state.item.id}` : undefined }); onComplete(); return }
       const uploadId = String(state.id), chunkSize = Math.min(Number(state.chunkSize), 16 * 1048576)
       if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) throw new Error('Tamanho de parte inválido. Atualize a página.')
       transfer.uploadId = uploadId; savedTransfers.current.set(item.id, {uploadId,key}); remember(key, uploadId)
@@ -71,7 +71,7 @@ export function UploadZone({ code, maxFileMb, onComplete }: { code: string; maxF
         offset = result.offset
       }
       const completed = await api(`/api/${code}/uploads/${uploadId}/complete`, { method: 'POST', signal })
-      remember(key); update(item.id, { status: 'complete', progress: 100, thumbnail: /\.(png|jpe?g|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(item.file.name) ? `/api/${code}/thumbnail/${completed.id}` : undefined }); onComplete()
+      remember(key); update(item.id, { status: 'complete', progress: 100, thumbnail: /\.(png|jpe?g|webp|gif|avif|heic|heif|tiff?)$/i.test(item.file.name) ? `/api/${code}/thumbnail/${completed.id}` : undefined }); onComplete()
     } catch (e) {
       if (!mounted.current) return
       update(item.id, { status: signal.aborted ? 'paused' : 'failed', error: signal.aborted ? undefined : e instanceof Error ? e.message : 'Não foi possível enviar. Tente retomar.' })

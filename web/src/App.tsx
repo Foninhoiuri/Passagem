@@ -142,7 +142,7 @@ function RoomView({ onLogout }: { onLogout: () => void }) {
           <div className="flex shrink-0 gap-1">{it.kind === 'file' ? <Button size="sm" color="secondary" iconLeading={Download01} href={`/api/${code}/file/${it.id}`} aria-label={`Baixar ${it.name}`} /> : <Button size="sm" color="secondary" iconLeading={copied === it.id ? Check : Copy01} onClick={() => flash(it.id, it.text || '')} aria-label="Copiar texto original" />}
             <Button size="sm" color="tertiary" iconLeading={Trash01} isLoading={removing === it.id} onClick={() => setConfirmDelete(it)} aria-label={`Apagar ${it.kind === 'file' ? it.name : 'texto'}`} /></div>
         </div>
-        {it.kind === 'text' ? <Markdown text={it.text || ''} /> : /\.(png|jpe?g|webp|gif|avif|bmp|tiff?|heic|heif)$/i.test(it.name || '') && (it.size || 0) <= 50 * 1048576 ? <ImagePreview item={it} /> : null}
+        {it.kind === 'text' ? <Markdown text={it.text || ''} /> : /\.(png|jpe?g|webp|gif|avif|tiff?|heic|heif)$/i.test(it.name || '') && (it.size || 0) <= 50 * 1048576 ? <ImagePreview item={it} /> : null}
       </li>)}{!room.items.length && <li className="empty-state"><UploadCloud01 className="mx-auto mb-3 size-6 text-fg-quaternary" /><p className="text-sm font-medium text-primary">Sua sala está pronta</p><p className="mt-1 text-sm text-tertiary">Envie um arquivo ou texto. Ele aparece nos dois aparelhos.</p></li>}</ul>
     </section>
     <p className="text-center text-xs text-quaternary">Cada arquivo e texto expira após {room.itemTtlHours} h do envio. {room.isPrivate ? 'Sua sala privada continua disponível mesmo vazia. Saia ao usar computadores de outras pessoas.' : 'Quando não houver mais itens, esta sala será encerrada. O link dá acesso a quem o tiver.'}</p>
