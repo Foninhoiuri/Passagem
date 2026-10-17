@@ -13,6 +13,7 @@ import './App.css'
 
 type Item = { id: string; kind: 'text' | 'file'; name?: string; size?: number; text?: string; at: number; expiresAt?: number }
 type Room = { items: Item[]; ttlHours: number | null; maxFileMb: number; maxRoomMb: number; itemTtlHours: number; isPrivate: boolean; isAdmin: boolean; sharedRooms?: {code: string; expiresAt: number}[] }
+if (/^\/1\/?$/.test(location.pathname)) history.replaceState(null, '', '/' + location.search + location.hash)
 const code = location.pathname.slice(1).split('/')[0] || '1'
 const fmtSize = (n = 0) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`
 const fmtTime = (t: number) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -108,7 +109,7 @@ function RoomView({ onLogout }: { onLogout: () => void }) {
   return <Shell>
     <div className="panel flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0"><p className="text-xs font-semibold text-brand-secondary">{room.isPrivate ? 'SALA 1 · PRIVADA' : 'SALA COMPARTILHADA'}</p><p className="mt-1 text-sm text-tertiary">{room.isPrivate ? 'Seus arquivos ficam aqui. Só você cria salas para convidados.' : 'Quem tem o link pode enviar e baixar. Não precisa de senha.'}</p></div>
-      <div className="flex flex-wrap gap-2">{room.isPrivate ? <><Button size="sm" iconLeading={Plus} onClick={createShared} isLoading={creating}>Criar sala compartilhada</Button><Button size="sm" color="tertiary" onClick={logout}>Sair</Button></> : <>{room.isAdmin && <Button size="sm" color="tertiary" href="/1">Minha sala</Button>}<Button size="sm" color="secondary" iconLeading={copied === 'link' ? Check : Link01} onClick={() => flash('link', location.href)}>Copiar link</Button></>}</div>
+      <div className="flex flex-wrap gap-2">{room.isPrivate ? <><Button size="sm" iconLeading={Plus} onClick={createShared} isLoading={creating}>Criar sala compartilhada</Button><Button size="sm" color="tertiary" onClick={logout}>Sair</Button></> : <>{room.isAdmin && <Button size="sm" color="tertiary" href="/">Minha sala</Button>}<Button size="sm" color="secondary" iconLeading={copied === 'link' ? Check : Link01} onClick={() => flash('link', location.href)}>Copiar link</Button></>}</div>
       {!room.isPrivate && <p className="w-full break-all text-xs text-quaternary">{location.host}/{code}</p>}
     </div>
     {room.isPrivate && !!room.sharedRooms?.length && <section className="panel space-y-3" aria-labelledby="shared-rooms-title"><h2 id="shared-rooms-title" className="text-sm font-semibold text-primary">Suas salas compartilhadas</h2><ul className="space-y-3">{room.sharedRooms.map((r, i) => <li key={r.code} className="flex flex-wrap items-center justify-between gap-2 border-b border-secondary pb-3 last:border-0 last:pb-0"><div><a href={'/' + r.code} className="text-sm font-medium text-brand-secondary">Sala compartilhada {i + 1}</a><p className="text-xs text-tertiary">Último item expira em {fmtTime(r.expiresAt)}.</p></div><div className="flex gap-2"><Button size="sm" color="secondary" onClick={() => flash(r.code, location.origin + '/' + r.code)}>{copied === r.code ? 'Copiado' : 'Copiar link'}</Button><Button size="sm" color="tertiary" onClick={() => setCloseCode(r.code)}>Encerrar</Button></div></li>)}</ul>
@@ -152,7 +153,7 @@ function RoomView({ onLogout }: { onLogout: () => void }) {
     </ModalOverlay>
   </Shell>
 }
-export default function App() {
+function RoomApp() {
   const [admin, setAdmin] = useState<boolean | null>(null)
   const locked = useCallback(() => setAdmin(false), [])
   useEffect(() => {
@@ -160,6 +161,27 @@ export default function App() {
     api('/api/session').then(j => { setCsrf(j.csrfToken); setAdmin(j.isAdmin) }).catch(() => setAdmin(false))
   }, [])
   if (admin === null) return <Shell><p role="status" className="text-tertiary">Abrindo Passagem…</p></Shell>
-  if (code === '1' && !admin) return <Home onLogin={() => { history.replaceState(null, '', '/1'); setAdmin(true) }} />
+  if (code === '1' && !admin) return <Home onLogin={() => { setAdmin(true) }} />
   return <RoomView onLogout={locked} />
+}
+
+
+function safariNeedsInstallation() {
+  const ua = navigator.userAgent
+  const safari = /Safari\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|Edg\/|OPiOS|OPR\/|Android/.test(ua)
+  const standalone = matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  return code === '1' && safari && !standalone
+}
+
+export default function App() {
+  const [showInstall, setShowInstall] = useState(safariNeedsInstallation)
+  if (!showInstall) return <RoomApp />
+  const mobile = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  return <Shell><section className="panel space-y-5" aria-labelledby="install-title">
+    <img src="/passagem-logo.png" alt="Logo do Passagem" className="mx-auto size-24 rounded-2xl" />
+    <div><h2 id="install-title" className="text-lg font-semibold text-primary">Instalar o Passagem</h2><p className="mt-2 text-md text-tertiary">Sua ponte entre aparelhos, direto na tela de início.</p></div>
+    <p className="text-sm text-tertiary">{mobile ? 'No Safari, toque em Compartilhar → Adicionar à Tela de Início. Mantenha “Abrir como app web” ativado e toque em Adicionar.' : 'No Safari, abra o menu Arquivo → Adicionar ao Dock e confirme em Adicionar.'}</p>
+    <Button size="lg" onClick={() => setShowInstall(false)}>Continuar no navegador</Button>
+    <p className="text-xs text-tertiary">Seus arquivos continuam na sua sala. Instalar ou remover o atalho não os apaga.</p>
+  </section></Shell>
 }
