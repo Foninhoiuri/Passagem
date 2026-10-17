@@ -20,3 +20,4 @@ jobs:
       - run: npm ci --omit=dev
       - run: node server/smoke.test.js
       - run: docker build -t passagem:ci .
+      - run: docker run --rm --memory=512m --read-only --tmpfs /tmp:size=32m,noexec,nosuid passagem:ci node server/thumbnail.test.js

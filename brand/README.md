@@ -10,3 +10,7 @@ Direção **C — Entre aparelhos**, escolhida por Igor em 16/10/2026. Duas seta
 - Símbolo original construído em vetores; não depende de fonte, imagem externa ou marca de terceiros. O nome na interface usa a tipografia do app.
 
 Conferência: auditoria SVG e renderização visual; versões pequenas, monocromáticas e fundo de cor. Pesquisa formal de registro de marca não foi realizada.
+
+## Refinamento de 16/10/2026
+
+Direção Entre aparelhos preservada, agora com duas molduras de tela e setas separadas, sem contornos que se cruzem. Ícones públicos usam nomes `passagem-v2-*` para não reutilizar imagens de instalações antigas. PNGs de 32/48 px atendem favicons, 180 px atende Apple e 192/512 px atende o manifesto; máscara de 512 px mantém a área segura.

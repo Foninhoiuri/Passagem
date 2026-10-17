@@ -3,7 +3,7 @@ import { DropZone, FileTrigger, Button as AriaButton } from 'react-aria-componen
 import { Check, UploadCloud01, Trash01 } from '@untitledui/icons'
 import { api, requestHeaders } from '@/utils/api'
 
-type Upload = { id: string; file: File; preview?: string; progress: number; status: 'queued' | 'uploading' | 'complete' | 'failed' | 'paused'; error?: string }
+type Upload = { id: string; file: File; preview?: string; thumbnail?: string; progress: number; status: 'queued' | 'uploading' | 'complete' | 'failed' | 'paused'; error?: string }
 const size = (n: number) => n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`
 
 export function UploadZone({ code, maxFileMb, onComplete }: { code: string; maxFileMb: number; onComplete: () => void }) {
@@ -40,7 +40,7 @@ export function UploadZone({ code, maxFileMb, onComplete }: { code: string; maxF
         catch (e) { if ((e as {status?: number}).status !== 404) throw e; remember(key) }
       }
       if (!state) state = await api(`/api/${code}/uploads`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: item.file.name || 'colado.png', size: item.file.size, type: item.file.type || 'application/octet-stream' }) })
-      if (state.complete) { remember(key); update(item.id, { status: 'complete', progress: 100 }); onComplete(); return }
+      if (state.complete) { remember(key); update(item.id, { status: 'complete', progress: 100, thumbnail: /\.(png|jpe?g|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(item.file.name) ? `/api/${code}/thumbnail/${state.item.id}` : undefined }); onComplete(); return }
       const uploadId = String(state.id), chunkSize = Math.min(Number(state.chunkSize), 16 * 1048576)
       if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) throw new Error('Tamanho de parte inválido. Atualize a página.')
       transfer.uploadId = uploadId; savedTransfers.current.set(item.id, {uploadId,key}); remember(key, uploadId)
@@ -70,8 +70,8 @@ export function UploadZone({ code, maxFileMb, onComplete }: { code: string; maxF
         })
         offset = result.offset
       }
-      await api(`/api/${code}/uploads/${uploadId}/complete`, { method: 'POST', signal })
-      remember(key); update(item.id, { status: 'complete', progress: 100 }); onComplete()
+      const completed = await api(`/api/${code}/uploads/${uploadId}/complete`, { method: 'POST', signal })
+      remember(key); update(item.id, { status: 'complete', progress: 100, thumbnail: /\.(png|jpe?g|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(item.file.name) ? `/api/${code}/thumbnail/${completed.id}` : undefined }); onComplete()
     } catch (e) {
       if (!mounted.current) return
       update(item.id, { status: signal.aborted ? 'paused' : 'failed', error: signal.aborted ? undefined : e instanceof Error ? e.message : 'Não foi possível enviar. Tente retomar.' })
@@ -143,7 +143,7 @@ export function UploadZone({ code, maxFileMb, onComplete }: { code: string; maxF
     {error && <p role="alert" className="text-sm text-error-primary">{error}</p>}
     <ul className="space-y-2" aria-label="Progresso dos envios" aria-live="polite">
       {uploads.map(item => <li className="upload-item" key={item.id} data-status={item.status}>
-        {item.preview ? <img src={item.preview} alt={`Prévia de ${item.file.name}`} className="upload-thumbnail" /> : <span className="file-format">{item.file.name.split('.').pop()?.slice(0, 5).toUpperCase() || 'ARQ'}</span>}
+        {item.thumbnail || item.preview ? <img src={item.thumbnail || item.preview} alt={`Prévia de ${item.file.name}`} className="upload-thumbnail" onError={() => update(item.id, {thumbnail: undefined, preview: undefined})} /> : <span className="file-format">{item.file.name.split('.').pop()?.slice(0, 5).toUpperCase() || 'ARQ'}</span>}
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-primary" title={item.file.name}>{item.file.name}</p>
           <p className="text-xs text-tertiary">{size(item.file.size)} · {item.status === 'complete' ? 'Enviado' : item.status === 'failed' ? 'Envio interrompido' : item.status === 'paused' ? `Pausado em ${item.progress}%` : `${item.progress}%`}</p>
           {item.status === 'uploading' && <progress className="upload-progress" value={item.progress} max={100} aria-label={`Enviando ${item.file.name}`} />}

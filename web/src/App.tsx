@@ -19,7 +19,7 @@ const message = (e: unknown) => e instanceof Error ? e.message : 'Sem conexão. 
 
 function Shell({ children }: { children: React.ReactNode }) {
   return <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-    <header className="flex items-center gap-3"><a href="/" aria-label="Passagem, início" className="flex size-11 items-center justify-center rounded-xl bg-brand-solid text-white"><svg className="size-7" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M48 48H136V16L200 80L136 144V112H88V152H48Z M208 208H120V240L56 176L120 112V144H168V104H208Z" /></svg></a>
+    <header className="flex items-center gap-3"><a href="/" aria-label="Passagem, início" className="flex size-11 items-center justify-center rounded-xl bg-brand-solid text-white"><svg className="size-7" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M92 40H56C42.7 40 32 50.7 32 64V192C32 205.3 42.7 216 56 216H92V200H56C51.6 200 48 196.4 48 192V64C48 59.6 51.6 56 56 56H92Z M164 40H200C213.3 40 224 50.7 224 64V192C224 205.3 213.3 216 200 216H164V200H200C204.4 200 208 196.4 208 192V64C208 59.6 204.4 56 200 56H164Z"/><path d="M80 80H144V60L180 96L144 132V112H80Z M176 144H112V124L76 160L112 196V176H176Z"/></svg></a>
       <div><h1 className="text-xl font-semibold text-primary">Passagem</h1><p className="text-sm text-tertiary">Uma ponte entre suas telas.</p></div></header>
     {children}
     <PwaInstall />
@@ -142,7 +142,7 @@ function RoomView({ onLogout }: { onLogout: () => void }) {
           <div className="flex shrink-0 gap-1">{it.kind === 'file' ? <Button size="sm" color="secondary" iconLeading={Download01} href={`/api/${code}/file/${it.id}`} aria-label={`Baixar ${it.name}`} /> : <Button size="sm" color="secondary" iconLeading={copied === it.id ? Check : Copy01} onClick={() => flash(it.id, it.text || '')} aria-label="Copiar texto original" />}
             <Button size="sm" color="tertiary" iconLeading={Trash01} isLoading={removing === it.id} onClick={() => setConfirmDelete(it)} aria-label={`Apagar ${it.kind === 'file' ? it.name : 'texto'}`} /></div>
         </div>
-        {it.kind === 'text' ? <Markdown text={it.text || ''} /> : /\.(png|jpe?g|webp|gif|avif)$/i.test(it.name || '') && (it.size || 0) <= 50 * 1048576 ? <ImagePreview item={it} /> : null}
+        {it.kind === 'text' ? <Markdown text={it.text || ''} /> : /\.(png|jpe?g|webp|gif|avif|bmp|tiff?|heic|heif)$/i.test(it.name || '') && (it.size || 0) <= 50 * 1048576 ? <ImagePreview item={it} /> : null}
       </li>)}{!room.items.length && <li className="empty-state"><UploadCloud01 className="mx-auto mb-3 size-6 text-fg-quaternary" /><p className="text-sm font-medium text-primary">Sua sala está pronta</p><p className="mt-1 text-sm text-tertiary">Envie um arquivo ou texto. Ele aparece nos dois aparelhos.</p></li>}</ul>
     </section>
     <p className="text-center text-xs text-quaternary">Cada arquivo e texto expira após {room.itemTtlHours} h do envio. {room.isPrivate ? 'Sua sala privada continua disponível mesmo vazia. Saia ao usar computadores de outras pessoas.' : 'Quando não houver mais itens, esta sala será encerrada. O link dá acesso a quem o tiver.'}</p>

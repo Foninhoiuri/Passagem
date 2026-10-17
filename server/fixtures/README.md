@@ -1,0 +1,1 @@
+Fixture HEIC sintética criada em 16/10/2026 a partir da própria marca Passagem com o encoder HEIC nativo do macOS. Não contém foto pessoal. Usada para verificar o decoder real no runtime Linux e o tratamento de conteúdo corrompido.
