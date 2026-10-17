@@ -6,7 +6,7 @@ COPY web/ ./
 RUN npm run build
 
 FROM node:24-alpine3.23
-RUN apk add --no-cache imagemagick imagemagick-heic imagemagick-webp libde265
+RUN apk add --no-cache heif-thumbnailer util-linux-misc
 WORKDIR /app
 ARG APP_VERSION=development
 ENV NODE_ENV=production DATA_DIR=/data APP_VERSION=${APP_VERSION}

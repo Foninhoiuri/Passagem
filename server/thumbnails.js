@@ -22,13 +22,12 @@ function raster(file){
 }
 async function heicThumbnail(file,tmp){
  const options={timeout:12000,killSignal:'SIGKILL',maxBuffer:8192,windowsHide:true}
- if(process.platform==='darwin'){
-  // Native decoder for local macOS development. Production uses the isolated HEIC coder below.
-  const png=tmp+'.png'
-  try{await execute('/usr/bin/sips',['-s','format','png','-Z','640',file,'--out',png],options);await sharp(png,{limitInputPixels:40e6}).rotate().resize({width:640,height:480,fit:'inside',withoutEnlargement:true}).webp({quality:78}).toFile(tmp)}finally{fs.rmSync(png,{force:true})}
- }else{
-  await execute('magick',['-limit','memory','256MiB','-limit','map','0','-limit','disk','0','-limit','thread','1','-limit','time','10','heic:'+file+'[0]','-auto-orient','-thumbnail','640x480>','-strip','-quality','78','webp:'+tmp],{...options,env:{...process.env,MAGICK_CONFIGURE_PATH:path.join(import.meta.dirname,'imagemagick')}})
- }
+ const png=tmp+'.png'
+ try{
+  if(process.platform==='darwin')await execute('/usr/bin/sips',['-s','format','png','-Z','640',file,'--out',png],options)
+  else await execute('prlimit',['--as=402653184','--cpu=10','--nofile=64','--','heif-thumbnailer','-s','640',file,png],options)
+  await sharp(png,{limitInputPixels:40e6}).rotate().resize({width:640,height:480,fit:'inside',withoutEnlargement:true}).webp({quality:78}).timeout({seconds:5}).toFile(tmp)
+ }finally{fs.rmSync(png,{force:true})}
 }
 
 export async function thumbnail(c,id){

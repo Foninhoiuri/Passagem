@@ -16,7 +16,7 @@ O PWA pode ser instalado pelo navegador. Seu cache contém apenas recursos públ
 
 Requer Node 24. Instale as dependências na raiz e em `web` com `npm ci`. Configure as variáveis de `.env.example` sem versionar segredos. Em desenvolvimento, use `PUBLIC_ORIGIN=http://localhost:5173`, uma senha de teste e `node server/index.js`; em `web`, execute `npm run dev`. Produção exige `PUBLIC_ORIGIN` HTTPS e a rede confiável do proxy.
 
-Validação: `npm test`, `npm --prefix web run build` e `docker build -t passagem .`. O runtime usa Sharp/libvips para miniaturas raster e ImageMagick/libheif para HEIC/HEIF de iPhone. O decoder HEIC roda em processo separado, sem shell, com timeout e política restrita a HEIC/WebP, limites de memória e sem delegados externos. Desenvolvimento macOS usa o decoder nativo. Execute também `node server/thumbnail.test.js`; o CI repete esse teste dentro da imagem Linux.
+Validação: `npm test`, `npm --prefix web run build` e `docker build -t passagem .`. O runtime usa Sharp/libvips para miniaturas raster e heif-thumbnailer/libheif para HEIC/HEIF de iPhone. O decoder HEIC roda em processo separado, sem shell, com timeout e limites de 384 MiB de memória virtual e dez segundos de CPU via prlimit, com saída PNG reduzida convertida para WebP. Desenvolvimento macOS usa o decoder nativo. Execute também `node server/thumbnail.test.js`; o CI repete esse teste dentro da imagem Linux.
 
 ## Publicação
 
