@@ -7,6 +7,6 @@
   "private": true,
   "version": "0.2.0",
   "scripts": {
-    "test": "node server/smoke.test.js"
+    "test": "node server/smoke.test.js && node server/relay.test.js"
   }
 }

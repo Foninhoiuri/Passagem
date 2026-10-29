@@ -32,7 +32,7 @@ for (const cidr of (process.env.TRUST_PROXY_CIDRS || '').split(',').filter(Boole
 const peer = req => (req.socket.remoteAddress || '').replace(/^::ffff:/, '')
 export const trustedProxy = req => net.isIPv4(peer(req)) && trusted.check(peer(req), 'ipv4')
 const ip = req => trustedProxy(req) && net.isIP(req.headers['cf-connecting-ip'] || '') ? req.headers['cf-connecting-ip'] : peer(req)
-const clientKey = req => sha(salt.toString('hex') + ip(req))
+export const clientKey = req => sha(salt.toString('hex') + ip(req))
 const WINDOW = 15 * 60e3
 const MAX_FAILURES = Number(process.env.LOGIN_MAX_ATTEMPTS || 5)
 const ACCOUNT_MAX = Number(process.env.LOGIN_ACCOUNT_ATTEMPTS || 20)

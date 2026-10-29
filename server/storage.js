@@ -10,8 +10,12 @@ export const limits = { maxFileMb: setting('MAX_FILE_MB', 5120), maxRoomMb: sett
 if (limits.chunkSize > 16 * MB) throw new Error('UPLOAD_CHUNK_MB deve ser no máximo 16.')
 const reserve = setting('MIN_FREE_MB', 2048, 0) * MB
 export const ttlMs = setting('ROOM_TTL_HOURS', 24) * 3600e3
+export const relayTtlMs = setting('RELAY_TTL_MINUTES', 60) * 60e3 // transferência direta: só trânsito, some em 1 h
 const pendingTtl = setting('UPLOAD_TTL_HOURS', 6) * 3600e3
-export const validRoom = c => c === '1' || /^[A-Za-z0-9_-]{32}$/.test(c) || /^[a-z2-9]{8}$/.test(c)
+export const isRelay = c => /^relay-[a-f0-9]{32}$/.test(c || '')
+export const validRoom = c => c === '1' || /^[A-Za-z0-9_-]{32}$/.test(c) || /^[a-z2-9]{8}$/.test(c) || isRelay(c)
+const ttlOf = c => isRelay(c) ? relayTtlMs : ttlMs
+const relayRooms = () => fs.readdirSync(DATA).filter(isRelay)
 export const validId = id => /^[a-f0-9]{16}(?:[a-f0-9]{16})?$/.test(id || '')
 export const roomDir = c => { if (!validRoom(c)) throw error(404, 'Sala não encontrada.'); return path.join(DATA, c) }
 export function atomic(file, data) { const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(data), { mode: 0o600 }); fs.renameSync(tmp, file) }
@@ -24,10 +28,11 @@ function roomInfo(c) {
 }
 function markUsed(c) { if (c !== '1') atomic(path.join(roomDir(c), '.room.json'), { ...roomInfo(c), hadItems: true }) }
 export function rooms() {
-  const all = fs.readdirSync(DATA).filter(c => c !== '1' && validRoom(c) && alive(c))
+  const all = fs.readdirSync(DATA).filter(c => c !== '1' && validRoom(c) && !isRelay(c) && alive(c))
   for (const c of all) cleanupRoom(c)
   return all.filter(alive).map(code => { const list = items(code); return { code, itemCount: list.length, expiresAt: list.length ? Math.max(...list.map(i => i.at + ttlMs)) : roomInfo(code).createdAt + ttlMs } }).sort((a,b) => b.expiresAt-a.expiresAt)
 }
+export function ensureRelay(c) { if (!isRelay(c)) throw error(404, 'Não encontrado.'); fs.mkdirSync(roomDir(c), { recursive: true, mode: 0o700 }) }
 export function createRoom() {
   if (rooms().length >= 100) throw error(409, 'Limite de 100 salas compartilhadas. Encerre uma sala para criar outra.')
   const code = crypto.randomBytes(24).toString('base64url'); fs.mkdirSync(roomDir(code), { mode: 0o700 }); atomic(path.join(roomDir(code), '.room.json'), { createdAt: Date.now(), hadItems: false }); return code
@@ -73,13 +78,15 @@ export function capacity(c, size) {
   const current = usage(c)
   if (current.count >= 1000) throw error(409, 'Limite de itens da sala atingido. Remova itens para continuar.')
   if (current.reserved + size > limits.maxRoomMb * MB) throw error(413, 'Esta sala não tem espaço para este arquivo.')
-  const all = ['1', ...rooms().map(r => r.code)].map(usage)
+  const all = ['1', ...rooms().map(r => r.code), ...relayRooms()].map(usage)
   if (all.reduce((n,u) => n + u.reserved, 0) + size > limits.maxTotalMb * MB) throw error(507, 'O armazenamento total atingiu o limite. Remova arquivos antes de enviar mais.')
   const disk = fs.statfsSync(DATA), available = disk.bavail * disk.bsize
   if (available - all.reduce((n,u) => n + u.remaining, 0) - size < reserve) throw error(507, 'Espaço livre insuficiente para enviar este arquivo com segurança.')
 }
+const relayName = n => { if (typeof n !== 'string' || !n.trim() || n.length > 500) throw error(400, 'Nome de arquivo inválido.'); return safeName(n) || 'arquivo' }
 export function startUpload(c, data) {
-  const name = validateFile(data.name, data.type)
+  // transferência direta aceita qualquer tipo (instaladores, drivers): só trânsito, nunca servido como página
+  const name = isRelay(c) ? relayName(data.name) : validateFile(data.name, data.type)
   if (!Number.isSafeInteger(data.size) || data.size < 0 || data.size > limits.maxFileMb * MB) throw error(413, `Máximo de ${limits.maxFileMb} MB por arquivo.`)
   capacity(c, data.size); fs.mkdirSync(upDir(c), { recursive: true, mode: 0o700 })
   const id = crypto.randomBytes(16).toString('hex'), meta = { id, name, type: data.type, size: data.size, offset: 0, updatedAt: Date.now() }
@@ -150,7 +157,7 @@ export function cleanupRoom(c) {
   if(!alive(c))return
   const before=items(c), info=c==='1'?null:roomInfo(c)
   if(before.length && info && !info.hadItems)markUsed(c)
-  for(const it of before)if(Date.now()-it.at>=ttlMs){
+  for(const it of before)if(Date.now()-it.at>=ttlOf(c)){
     fs.rmSync(bin(c,it.id),{force:true});fs.rmSync(path.join(roomDir(c),'.thumb-'+it.id+'.webp'),{force:true});fs.rmSync(fileMeta(c,it.id),{force:true});audit(null,'item-expire',c)
   }
   for(const m of pending(c))if(Date.now()-m.updatedAt>pendingTtl&&!active.has(c+':'+m.id)){
@@ -158,7 +165,7 @@ export function cleanupRoom(c) {
   }
   if(c!=='1'&&!items(c).length&&!pending(c).length&&![...active].some(k=>k.startsWith(c+':'))){
     const info=roomInfo(c)
-    if(info.hadItems||Date.now()-info.createdAt>=ttlMs){fs.rmSync(roomDir(c),{recursive:true,force:true});audit(null,'empty-room-expire',c)}
+    if(info.hadItems||Date.now()-info.createdAt>=ttlOf(c)){fs.rmSync(roomDir(c),{recursive:true,force:true});audit(null,'empty-room-expire',c)}
   }
 }
 export function cleanup() { for(const c of fs.readdirSync(DATA).filter(validRoom))cleanupRoom(c) }

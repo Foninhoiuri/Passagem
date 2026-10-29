@@ -9,6 +9,8 @@ services:
       - "127.0.0.1:${HOST_PORT:-8090}:3000"
     environment:
       ADMIN_PIN: ${ADMIN_PIN:?defina ADMIN_PIN nas variáveis da stack}
+      RELAY_VALIDATE_URL: ${RELAY_VALIDATE_URL:-}
+      RELAY_TTL_MINUTES: ${RELAY_TTL_MINUTES:-60}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?defina PUBLIC_ORIGIN com HTTPS}
       TRUST_PROXY_CIDRS: ${TRUST_PROXY_CIDRS:?defina a rede interna do cloudflared}
       ROOM_TTL_HOURS: ${ROOM_TTL_HOURS:-24}

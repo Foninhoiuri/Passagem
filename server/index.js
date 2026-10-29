@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { audit, body, error, guard, json, login, logout, isPublicIcon, isPublicPwaAsset, requireOwner, securityError, session } from './security.js'
 import { addText, alive, cancelUpload, cleanup, cleanupRoom, closeRoom, createRoom, finishUpload, items, limits, rooms, sendFile, startUpload, touch, ttlMs, uploadState, validRoom, writeChunk } from './storage.js'
+import {relay} from './relay.js'
 import {thumbnail} from './thumbnails.js'
 import {documentPreview} from './previews.js'
 import {sendPublicIcon} from './public-icons.js'
@@ -14,6 +15,7 @@ const VERSION=process.env.APP_VERSION||'development'
 const iconDiagnosticSeen=new Set()
 async function api(req,res,url){
  const parts=url.pathname.split('/').filter(Boolean).slice(1)
+ if(parts[0]==='relay')return relay(req,res,parts.slice(1))
  if(parts.length===1&&parts[0]==='session'&&req.method==='GET'){const s=session(req);return json(res,200,{isAdmin:!!s,...(s?{csrfToken:s.csrf}:{})})}
  if(parts.length===1&&parts[0]==='login'&&req.method==='POST')return login(req,res)
  if(parts.length===1&&parts[0]==='logout'&&req.method==='POST')return logout(req,res)
