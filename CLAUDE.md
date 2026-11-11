@@ -3,7 +3,7 @@
 Servidor Node nativo em `server/`, Sharp para miniaturas, frontend React/Vite em `web/`. Leia README.md e docs/seguranca-2026-10-16.md antes de alterar autenticação, armazenamento ou publicação.
 
 - Nunca versionar `.env`, PIN, credenciais, dados enviados ou backups. Segredos somente nas variáveis da stack.
-- Sala 1 privada e permanente; apenas proprietário autenticado cria salas compartilhadas sem senha. Links compartilhados concedem leitura, envio e exclusão.
+- Início `/` público: qualquer pessoa cria sala compartilhada sem senha (limite ROOMS_PER_HOUR por origem, MAX_ROOMS global). Sala privada permanente em `/1`, com senha. Links compartilhados concedem leitura, envio e exclusão.
 - Expiração é por item, não por atividade da sala. Remover sala compartilhada somente vazia e sem transferências pendentes.
 - Downloads de originais sempre como attachment; previews somente miniaturas raster geradas pelo servidor.
 - Não fazer push ou deploy sem pedido do usuário. Nunca force push.

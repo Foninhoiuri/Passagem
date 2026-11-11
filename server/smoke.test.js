@@ -27,7 +27,6 @@ async function init(c,name,size,type='application/octet-stream',owner=false){ret
 try{
  assert.equal((await req('/api/1')).status,401,'private list needs login')
  assert.equal((await req('/api/1/text','POST',{text:'denied'})).status,401)
- assert.equal((await req('/api/rooms','POST',undefined,false,{'x-pin':testPin})).status,401,'raw PIN cannot create rooms')
  assert.equal((await req('/api/login','POST',{pin:'wrong'})).status,401)
  await login()
  const priv=await req('/api/1','GET',undefined,true);assert.equal(priv.status,200);assert.equal((await priv.json()).isPrivate,true)
@@ -38,7 +37,7 @@ try{
  const c=await create(),other=await create()
  assert.equal((await req(`/api/${c}`)).status,200,'guests need no password')
  const text=await req(`/api/${c}/text`,'POST',{text:'guest message'});assert.equal(text.status,201)
- assert.equal((await req('/api/rooms','POST',undefined,false)).status,401,'guest cannot create rooms')
+ assert.equal((await req('/api/rooms','POST',undefined,false)).status,201,'guest can create rooms')
  assert.equal((await req(`/api/rooms/${c}`,'DELETE')).status,401,'guest cannot close rooms')
  assert.equal((await init(c,'x.svg',5,'image/svg+xml')).status,415)
  assert.equal((await init(c,'x.txt',5,'image/png')).status,415)

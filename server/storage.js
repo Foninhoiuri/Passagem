@@ -11,6 +11,7 @@ if (limits.chunkSize > 16 * MB) throw new Error('UPLOAD_CHUNK_MB deve ser no má
 const reserve = setting('MIN_FREE_MB', 2048, 0) * MB
 export const ttlMs = setting('ROOM_TTL_HOURS', 24) * 3600e3
 export const relayTtlMs = setting('RELAY_TTL_MINUTES', 60) * 60e3 // transferência direta: só trânsito, some em 1 h
+const maxRooms = setting('MAX_ROOMS', 300)
 const pendingTtl = setting('UPLOAD_TTL_HOURS', 6) * 3600e3
 export const isRelay = c => /^relay-[a-f0-9]{32}$/.test(c || '')
 export const validRoom = c => c === '1' || /^[A-Za-z0-9_-]{32}$/.test(c) || /^[a-z2-9]{8}$/.test(c) || isRelay(c)
@@ -34,7 +35,7 @@ export function rooms() {
 }
 export function ensureRelay(c) { if (!isRelay(c)) throw error(404, 'Não encontrado.'); fs.mkdirSync(roomDir(c), { recursive: true, mode: 0o700 }) }
 export function createRoom() {
-  if (rooms().length >= 100) throw error(409, 'Limite de 100 salas compartilhadas. Encerre uma sala para criar outra.')
+  if (rooms().length >= maxRooms) throw error(409, 'Limite de salas atingido no momento. Tente novamente mais tarde.')
   const code = crypto.randomBytes(24).toString('base64url'); fs.mkdirSync(roomDir(code), { mode: 0o700 }); atomic(path.join(roomDir(code), '.room.json'), { createdAt: Date.now(), hadItems: false }); return code
 }
 export function items(c) {

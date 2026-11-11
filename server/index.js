@@ -3,7 +3,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { audit, body, error, guard, json, login, logout, isPublicIcon, isPublicPwaAsset, requireOwner, securityError, session } from './security.js'
+import { audit, body, clientKey, error, guard, json, login, logout, isPublicIcon, isPublicPwaAsset, requireOwner, securityError, session } from './security.js'
 import { addText, alive, cancelUpload, cleanup, cleanupRoom, closeRoom, createRoom, finishUpload, items, limits, rooms, sendFile, startUpload, touch, ttlMs, uploadState, validRoom, writeChunk } from './storage.js'
 import {relay} from './relay.js'
 import {thumbnail} from './thumbnails.js'
@@ -13,13 +13,20 @@ const PORT=Number(process.env.PORT||3000)
 const WEB=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web/dist')
 const VERSION=process.env.APP_VERSION||'development'
 const iconDiagnosticSeen=new Set()
+// Qualquer pessoa cria sala; visitantes têm limite por origem (proprietário não).
+const ROOMS_PER_HOUR=Number(process.env.ROOMS_PER_HOUR||10),roomCreations=new Map()
+function roomQuota(req){
+ const k=clientKey(req),now=Date.now(),recent=(roomCreations.get(k)||[]).filter(t=>now-t<3600e3)
+ if(recent.length>=ROOMS_PER_HOUR)throw error(429,'Você criou muitas salas em pouco tempo. Tente novamente mais tarde.')
+ recent.push(now);roomCreations.set(k,recent);if(roomCreations.size>10000)roomCreations.clear()
+}
 async function api(req,res,url){
  const parts=url.pathname.split('/').filter(Boolean).slice(1)
  if(parts[0]==='relay')return relay(req,res,parts.slice(1))
  if(parts.length===1&&parts[0]==='session'&&req.method==='GET'){const s=session(req);return json(res,200,{isAdmin:!!s,...(s?{csrfToken:s.csrf}:{})})}
  if(parts.length===1&&parts[0]==='login'&&req.method==='POST')return login(req,res)
  if(parts.length===1&&parts[0]==='logout'&&req.method==='POST')return logout(req,res)
- if(parts.length===1&&parts[0]==='rooms'&&req.method==='POST'){requireOwner(req);const c=createRoom();audit(req,'room-create',c);return json(res,201,{code:c})}
+ if(parts.length===1&&parts[0]==='rooms'&&req.method==='POST'){if(!session(req))roomQuota(req);const c=createRoom();audit(req,'room-create',c);return json(res,201,{code:c})}
  if(parts.length===2&&parts[0]==='rooms'&&req.method==='DELETE'){requireOwner(req);if(!validRoom(parts[1]))throw error(404,'Sala não encontrada.');closeRoom(parts[1]);audit(req,'room-close',parts[1]);return json(res,200,{ok:true})}
  const [c,kind,id,operation]=parts
  if(!validRoom(c))throw error(404,'Sala não encontrada.')

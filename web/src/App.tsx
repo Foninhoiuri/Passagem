@@ -13,8 +13,7 @@ import './App.css'
 
 type Item = { id: string; kind: 'text' | 'file'; name?: string; size?: number; text?: string; at: number; expiresAt?: number }
 type Room = { items: Item[]; ttlHours: number | null; maxFileMb: number; maxRoomMb: number; itemTtlHours: number; isPrivate: boolean; isAdmin: boolean; sharedRooms?: {code: string; expiresAt: number}[] }
-if (/^\/1\/?$/.test(location.pathname)) history.replaceState(null, '', '/' + location.search + location.hash)
-const code = location.pathname.slice(1).split('/')[0] || '1'
+const code = location.pathname.slice(1).split('/')[0] // '' = início público, '1' = sala privada
 const fmtSize = (n = 0) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`
 const fmtTime = (t: number) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 const message = (e: unknown) => e instanceof Error ? e.message : 'Sem conexão. Tente novamente.'
@@ -44,12 +43,39 @@ function Home({ onLogin }: { onLogin: () => void }) {
     } catch (e) { setErro(message(e)); if (e instanceof ApiError && e.retryAfter) setRetryAt(Date.now() + e.retryAfter * 1000) } finally { setBusy(false) }
   }
   return <Shell><form onSubmit={e => { e.preventDefault(); void enter() }} className="panel space-y-5">
-    <div><p className="mb-2 text-xs font-semibold text-brand-secondary">SALA 1 · PRIVADA</p><h2 className="text-lg font-semibold text-primary">Sua sala, sempre no mesmo lugar.</h2><p className="mt-2 text-md text-tertiary">Entre com sua senha para acessar seus arquivos e criar salas para compartilhar com outras pessoas.</p></div>
+    <div><p className="mb-2 text-xs font-semibold text-brand-secondary">SALA 1 · PRIVADA</p><h2 className="text-lg font-semibold text-primary">Sua sala, sempre no mesmo lugar.</h2><p className="mt-2 text-md text-tertiary">Entre com sua senha para acessar seus arquivos privados.</p></div>
     <Input label="Senha" type="password" autoComplete="current-password" value={pin} onChange={setPin} isInvalid={!!erro} hint={erro} />
     {remaining > 0 && <p role="status" className="text-sm text-tertiary">Tente novamente em {Math.ceil(remaining / 60)} min.</p>}
     <Button type="submit" size="lg" isLoading={busy} isDisabled={!pin || remaining > 0}>Entrar na minha sala</Button>
     <p className="text-xs text-tertiary">A senha não fica salva no navegador. Tentativas incorretas têm limite.</p>
   </form></Shell>
+}
+function Landing() {
+  const [busy, setBusy] = useState(false)
+  const [erro, setErro] = useState('')
+  const [link, setLink] = useState('')
+  const create = async () => {
+    if (busy) return
+    setBusy(true); setErro('')
+    try { const j = await api('/api/rooms', { method: 'POST' }); location.href = '/' + j.code } catch (e) { setErro(message(e)); setBusy(false) }
+  }
+  const join = () => {
+    const c = link.trim().split(/[/?#]/).filter(Boolean).pop() || ''
+    if (/^(?:[A-Za-z0-9_-]{32}|[a-z2-9]{8})$/.test(c)) location.href = '/' + c
+    else setErro('Link ou código inválido.')
+  }
+  return <Shell>
+    <section className="panel space-y-5">
+      <div><h2 className="text-lg font-semibold text-primary">Envie arquivos e textos entre aparelhos.</h2><p className="mt-2 text-md text-tertiary">Crie uma sala, compartilhe o link e pronto. Sem conta e sem senha. Cada item some após 24 horas.</p></div>
+      <Button size="lg" iconLeading={Plus} onClick={create} isLoading={busy}>Criar sala</Button>
+    </section>
+    <form className="panel space-y-3" onSubmit={e => { e.preventDefault(); join() }}>
+      <Input label="Já tem um link ou código?" value={link} onChange={v => { setLink(v); setErro('') }} isInvalid={!!erro} hint={erro} placeholder="Cole o link da sala" />
+      <Button type="submit" color="secondary" isDisabled={!link.trim()}>Entrar na sala</Button>
+    </form>
+    {erro && !link && <p role="alert" className="text-sm text-error-primary">{erro}</p>}
+    <p className="text-center text-sm text-tertiary"><a href="/1" className="font-medium text-brand-secondary">Minha sala privada</a></p>
+  </Shell>
 }
 function ImagePreview({ item }: { item: Item }) {
   const [failed, setFailed] = useState(false)
@@ -105,11 +131,11 @@ function RoomView({ onLogout }: { onLogout: () => void }) {
   const flash = async (id: string, value: string) => {
     try { await copy(value); setCopied(id); setTimeout(() => setCopied(''), 1500) } catch (e) { setErro(message(e)) }
   }
-  if (!room) return <Shell>{!loaded ? <p role="status" className="text-tertiary">Abrindo sala…</p> : <><p role="alert" className="text-error-primary">{erro}</p><Button color="secondary" href="/">Voltar à sala privada</Button></>}</Shell>
+  if (!room) return <Shell>{!loaded ? <p role="status" className="text-tertiary">Abrindo sala…</p> : <><p role="alert" className="text-error-primary">{erro}</p><Button color="secondary" href="/">Voltar ao início</Button></>}</Shell>
   return <Shell>
     <div className="panel flex flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0"><p className="text-xs font-semibold text-brand-secondary">{room.isPrivate ? 'SALA 1 · PRIVADA' : 'SALA COMPARTILHADA'}</p><p className="mt-1 text-sm text-tertiary">{room.isPrivate ? 'Seus arquivos ficam aqui. Só você cria salas para convidados.' : 'Quem tem o link pode enviar e baixar. Não precisa de senha.'}</p></div>
-      <div className="flex flex-wrap gap-2">{room.isPrivate ? <><Button size="sm" iconLeading={Plus} onClick={createShared} isLoading={creating}>Criar sala compartilhada</Button><Button size="sm" color="tertiary" onClick={logout}>Sair</Button></> : <>{room.isAdmin && <Button size="sm" color="tertiary" href="/">Minha sala</Button>}<Button size="sm" color="secondary" iconLeading={copied === 'link' ? Check : Link01} onClick={() => flash('link', location.href)}>Copiar link</Button></>}</div>
+      <div className="min-w-0"><p className="text-xs font-semibold text-brand-secondary">{room.isPrivate ? 'SALA 1 · PRIVADA' : 'SALA COMPARTILHADA'}</p><p className="mt-1 text-sm text-tertiary">{room.isPrivate ? 'Seus arquivos ficam aqui, protegidos pela sua senha.' : 'Quem tem o link pode enviar e baixar. Não precisa de senha.'}</p></div>
+      <div className="flex flex-wrap gap-2">{room.isPrivate ? <><Button size="sm" iconLeading={Plus} onClick={createShared} isLoading={creating}>Criar sala compartilhada</Button><Button size="sm" color="tertiary" onClick={logout}>Sair</Button></> : <>{room.isAdmin ? <Button size="sm" color="tertiary" href="/1">Minha sala</Button> : <Button size="sm" color="tertiary" href="/">Nova sala</Button>}<Button size="sm" color="secondary" iconLeading={copied === 'link' ? Check : Link01} onClick={() => flash('link', location.href)}>Copiar link</Button></>}</div>
       {!room.isPrivate && <p className="w-full break-all text-xs text-quaternary">{location.host}/{code}</p>}
     </div>
     {room.isPrivate && !!room.sharedRooms?.length && <section className="panel space-y-3" aria-labelledby="shared-rooms-title"><h2 id="shared-rooms-title" className="text-sm font-semibold text-primary">Suas salas compartilhadas</h2><ul className="space-y-3">{room.sharedRooms.map((r, i) => <li key={r.code} className="flex flex-wrap items-center justify-between gap-2 border-b border-secondary pb-3 last:border-0 last:pb-0"><div><a href={'/' + r.code} className="text-sm font-medium text-brand-secondary">Sala compartilhada {i + 1}</a><p className="text-xs text-tertiary">Último item expira em {fmtTime(r.expiresAt)}.</p></div><div className="flex gap-2"><Button size="sm" color="secondary" onClick={() => flash(r.code, location.origin + '/' + r.code)}>{copied === r.code ? 'Copiado' : 'Copiar link'}</Button><Button size="sm" color="tertiary" onClick={() => setCloseCode(r.code)}>Encerrar</Button></div></li>)}</ul>
@@ -161,6 +187,7 @@ function RoomApp() {
     api('/api/session').then(j => { setCsrf(j.csrfToken); setAdmin(j.isAdmin) }).catch(() => setAdmin(false))
   }, [])
   if (admin === null) return <Shell><p role="status" className="text-tertiary">Abrindo Passagem…</p></Shell>
+  if (code === '') return <Landing />
   if (code === '1' && !admin) return <Home onLogin={() => { setAdmin(true) }} />
   return <RoomView onLogout={locked} />
 }
@@ -170,7 +197,7 @@ function safariNeedsInstallation() {
   const ua = navigator.userAgent
   const safari = /Safari\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|Edg\/|OPiOS|OPR\/|Android/.test(ua)
   const standalone = matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
-  return code === '1' && safari && !standalone
+  return code === '' && safari && !standalone
 }
 
 export default function App() {
@@ -182,6 +209,6 @@ export default function App() {
     <div><h2 id="install-title" className="text-lg font-semibold text-primary">Instalar o Passagem</h2><p className="mt-2 text-md text-tertiary">Sua ponte entre aparelhos, direto na tela de início.</p></div>
     <p className="text-sm text-tertiary">{mobile ? 'No Safari, toque em Compartilhar → Adicionar à Tela de Início. Mantenha “Abrir como app web” ativado e toque em Adicionar.' : 'No Safari, abra o menu Arquivo → Adicionar ao Dock e confirme em Adicionar.'}</p>
     <Button size="lg" onClick={() => setShowInstall(false)}>Continuar no navegador</Button>
-    <p className="text-xs text-tertiary">Seus arquivos continuam na sua sala. Instalar ou remover o atalho não os apaga.</p>
+    <p className="text-xs text-tertiary">Seus arquivos continuam nas suas salas. Instalar ou remover o atalho não os apaga.</p>
   </section></Shell>
 }
